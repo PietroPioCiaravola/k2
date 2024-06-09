@@ -3,8 +3,8 @@ package control;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
@@ -18,38 +18,28 @@ import model.DriverManagerConnectionPool;
 import model.OrderModel;
 import model.UserBean;
 
-/**
- * Servlet implementation class Login
- */
+
 @WebServlet("/Login")
 public class Login extends HttpServlet {
 	private static final long serialVersionUID = 1L;
-       
-    /**
-     * @see HttpServlet#HttpServlet()
-     */
+
+   
     public Login() {
         super();
-        // TODO Auto-generated constructor stub
     }
 
-	/**
-	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
-	 */
+	
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
 		doPost(request, response);
 	}
 
-	/**
-	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
-	 */
+	
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
 		String email = request.getParameter("j_email");
 		String password = request.getParameter("j_password");
 		String redirectedPage = "/loginPage.jsp";
 		Boolean control = false;
+		
 		try {
 			Connection con = DriverManagerConnectionPool.getConnection();
 			String sql = "SELECT email, passwordUser, ruolo, nome, cognome, indirizzo, telefono, numero, intestatario, CVV FROM UserAccount";
@@ -58,9 +48,9 @@ public class Login extends HttpServlet {
 			ResultSet rs = s.executeQuery(sql);
 			
 			while (rs.next()) {
-				if (email.compareTo(rs.getString(1)) == 0) {
-					String psw = checkPsw(password);
-					if (psw.compareTo(rs.getString(2)) == 0) {
+				if (email.equals(rs.getString(1))) {
+					String psw = checkPsw(password, "SHA-256"); // Modifica qui per cambiare l'algoritmo
+					if (psw.equals(rs.getString(2))) {
 						control = true;
 						UserBean registeredUser = new UserBean();
 						registeredUser.setEmail(rs.getString(1));
@@ -81,36 +71,40 @@ public class Login extends HttpServlet {
 						request.getSession().setAttribute("listaOrdini", model.getOrders(rs.getString(1)));
 						
 						redirectedPage = "/index.jsp";
-						DriverManagerConnectionPool.releaseConnection(con);
 					}
 				}
 			}
-		}
-		catch (Exception e) {
+			DriverManagerConnectionPool.releaseConnection(con);
+		} catch (Exception e) {
+			e.printStackTrace();
 			redirectedPage = "/loginPage.jsp";
 		}
-		if (control == false) {
+		
+		if (!control) {
 			request.getSession().setAttribute("login-error", true);
-		}
-		else {
+		} else {
 			request.getSession().setAttribute("login-error", false);
 		}
 		response.sendRedirect(request.getContextPath() + redirectedPage);
 	}
 		
-	private String checkPsw(String psw) {
+	private String checkPsw(String psw, String algorithm) {
 		MessageDigest md = null;
 		try {
-			md = MessageDigest.getInstance("MD5");
-		}
-		catch (Exception e) {
+			md = MessageDigest.getInstance(algorithm);
+		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
+			return null;
 		}
 		byte[] messageDigest = md.digest(psw.getBytes());
 		BigInteger number = new BigInteger(1, messageDigest);
 		String hashtext = number.toString(16);
+
+	
+        while (hashtext.length() < (md.getDigestLength() * 2)) {
+            hashtext = "0" + hashtext;
+        }
 		
 		return hashtext;
 	}
-
 }
